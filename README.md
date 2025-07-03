@@ -1,6 +1,6 @@
-# 📎 URL Shortener – Live Coding Task
+# URL Shortener – Live Coding Task
 
-## 📌 Goal
+## Goal
 
 Implement a simple in-memory URL shortener service in TypeScript by completing the `UrlShortener` class in the `src/url-shortener.ts` file. The class should support encoding and decoding URLs, custom aliases, and basic analytics.
 
@@ -8,7 +8,7 @@ This exercise evaluates your ability to design clean APIs, use appropriate data 
 
 ---
 
-## ✅ Requirements
+## Requirements
 
 The application should be fully console-based. You need to simulate user actions in the `index.ts` file.
 For example, calling `shortener.decode` simulates a user opening a short link.
@@ -56,6 +56,19 @@ Complete the following methods in the `UrlShortener` class:
 
 ---
 
-## 🧪 Tests
+## Database table schema
+
+```
+┌──────────────┬──────────────┬────────────────────────────────────────────┐
+│ Column       │ Type         │ Description                                │
+├──────────────┼──────────────┼────────────────────────────────────────────┤
+│ id           │ SERIAL       │ Primary key (auto-incrementing)            │
+│ short_key    │ VARCHAR(64)  │ Unique short alias for the long URL        │
+│ long_url     │ TEXT         │ Original full-length URL                   │
+│ click_count  │ INTEGER      │ Number of times the short URL was accessed │
+└──────────────┴──────────────┴────────────────────────────────────────────┘
+```
+
+## Tests
 
 Basic tests are provided in `tests/url-shortener.test.ts`. Your task is to implement the class until all tests pass.
