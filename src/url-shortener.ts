@@ -1,128 +1,98 @@
+// url-shortener.ts
+import { pool } from "./db";
+
 const BASE_URL = "http://sho.rt/";
 const SHORT_KEY_LENGTH = 6;
 
-type ShortKey = string;
-type LongUrl = string;
-type CustomAlias = string;
-
-interface DumpState {
-  urlMap: [ShortKey, LongUrl][];
-  stats: [ShortKey, number][];
-}
-
-export interface IUrlShortener {
-  encode(longUrl: LongUrl): string;
-  decode(shortUrl: string): LongUrl;
-  makeCustom(shortUrl: string, customAlias: CustomAlias): string;
-  getClickStats(shortUrl: string): number;
-}
-
-export default class UrlShortener implements IUrlShortener {
-  private static urlMap = new Map<ShortKey, LongUrl>();
-  private static reverseMap = new Map<LongUrl, ShortKey>();
-  private static stats = new Map<ShortKey, number>();
-
-  public encode(longUrl: LongUrl): string {
-    if (!longUrl || typeof longUrl !== "string") {
-      throw new Error("Invalid long URL");
-    }
-    const existingShort = UrlShortener.reverseMap.get(longUrl);
-    if (existingShort) {
-      return BASE_URL + existingShort;
+export default class UrlShortener {
+  async encode(longUrl: string): Promise<string> {
+    const existing = await pool.query(
+      `SELECT short_key FROM urls WHERE long_url = $1`,
+      [longUrl]
+    );
+    if (existing.rowCount > 0) {
+      return BASE_URL + existing.rows[0].short_key;
     }
 
-    const shortKey = UrlShortener.generateShortKey();
-    UrlShortener.urlMap.set(shortKey, longUrl);
-    UrlShortener.reverseMap.set(longUrl, shortKey);
-    UrlShortener.stats.set(shortKey, 0);
+    let shortKey: string;
+    do {
+      shortKey = Math.random()
+        .toString(36)
+        .substring(2, 2 + SHORT_KEY_LENGTH);
+      const { rowCount } = await pool.query(
+        `SELECT 1 FROM urls WHERE short_key = $1`,
+        [shortKey]
+      );
+      if (rowCount === 0) break;
+    } while (true);
+
+    await pool.query(`INSERT INTO urls (short_key, long_url) VALUES ($1, $2)`, [
+      shortKey,
+      longUrl,
+    ]);
 
     return BASE_URL + shortKey;
   }
 
-  public decode(shortUrl: string): LongUrl {
-    const key = UrlShortener.extractKeyFromShortUrl(shortUrl);
-    const original = UrlShortener.urlMap.get(key);
-    if (!original) {
+  async decode(shortUrl: string): Promise<string> {
+    const shortKey = shortUrl.replace(BASE_URL, "");
+    const result = await pool.query(
+      `UPDATE urls SET click_count = click_count + 1 WHERE short_key = $1 RETURNING long_url`,
+      [shortKey]
+    );
+    if (result.rowCount === 0) {
       throw new Error("Short URL not found");
     }
-
-    const clicks = UrlShortener.stats.get(key) ?? 0;
-    UrlShortener.stats.set(key, clicks + 1);
-    return original;
+    return result.rows[0].long_url;
   }
 
-  public makeCustom(shortUrl: string, customAlias: CustomAlias): string {
-    if (
-      !customAlias ||
-      typeof customAlias !== "string" ||
-      !/^[a-zA-Z0-9_-]{1,64}$/.test(customAlias)
-    ) {
-      throw new Error(
-        "Invalid custom alias format: only alphanumeric, underscore, hyphen allowed (1-64 chars)"
+  async makeCustom(shortUrl: string, customAlias: string): Promise<string> {
+    const shortKey = shortUrl.replace(BASE_URL, "");
+
+    // Check custom alias format
+    if (!/^[a-zA-Z0-9_-]{1,64}$/.test(customAlias)) {
+      throw new Error("Invalid alias");
+    }
+
+    const original = await pool.query(
+      `SELECT long_url, click_count FROM urls WHERE short_key = $1`,
+      [shortKey]
+    );
+    if (original.rowCount === 0)
+      throw new Error("Original short URL not found");
+
+    const conflict = await pool.query(
+      `SELECT 1 FROM urls WHERE short_key = $1`,
+      [customAlias]
+    );
+    if (conflict.rowCount > 0) throw new Error("Alias already taken");
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(`DELETE FROM urls WHERE short_key = $1`, [shortKey]);
+      await client.query(
+        `INSERT INTO urls (short_key, long_url, click_count) VALUES ($1, $2, $3)`,
+        [customAlias, original.rows[0].long_url, original.rows[0].click_count]
       );
+      await client.query("COMMIT");
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    } finally {
+      client.release();
     }
-
-    const oldKey = UrlShortener.extractKeyFromShortUrl(shortUrl);
-    const original = UrlShortener.urlMap.get(oldKey);
-
-    if (!original) {
-      throw new Error("Original short URL does not exist");
-    }
-
-    if (UrlShortener.urlMap.has(customAlias)) {
-      throw new Error("Custom alias already taken");
-    }
-
-    UrlShortener.urlMap.delete(oldKey);
-    UrlShortener.urlMap.set(customAlias, original);
-    UrlShortener.reverseMap.set(original, customAlias);
-
-    const stats = UrlShortener.stats.get(oldKey) ?? 0;
-    UrlShortener.stats.set(customAlias, stats);
-    UrlShortener.stats.delete(oldKey);
 
     return BASE_URL + customAlias;
   }
 
-  public getClickStats(shortUrl: string): number {
-    const key = UrlShortener.extractKeyFromShortUrl(shortUrl);
-    if (!UrlShortener.urlMap.has(key)) {
-      throw new Error("Short URL does not exist");
-    }
-    return UrlShortener.stats.get(key) ?? 0;
-  }
-
-  public static reset(): void {
-    this.urlMap.clear();
-    this.reverseMap.clear();
-    this.stats.clear();
-  }
-
-  public static dumpState(): DumpState {
-    return {
-      urlMap: Array.from(this.urlMap.entries()),
-      stats: Array.from(this.stats.entries()),
-    };
-  }
-
-  private static generateShortKey(): ShortKey {
-    let key: ShortKey;
-    do {
-      key = Math.random()
-        .toString(36)
-        .substring(2, 2 + SHORT_KEY_LENGTH);
-    } while (this.urlMap.has(key));
-    return key;
-  }
-
-  private static extractKeyFromShortUrl(shortUrl: string): ShortKey {
-    if (!shortUrl.startsWith(BASE_URL)) {
-      throw new Error("Invalid short URL format");
-    }
-    const key = shortUrl.slice(BASE_URL.length);
-    if (!key) {
-      throw new Error("Short URL key is missing");
-    }
-    return key;
+  async getClickStats(shortUrl: string): Promise<number> {
+    const shortKey = shortUrl.replace(BASE_URL, "");
+    const result = await pool.query(
+      `SELECT click_count FROM urls WHERE short_key = $1`,
+      [shortKey]
+    );
+    if (result.rowCount === 0) throw new Error("Short URL not found");
+    return result.rows[0].click_count;
   }
 }
