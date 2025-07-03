@@ -6,11 +6,15 @@ const SHORT_KEY_LENGTH = 6;
 
 export default class UrlShortener {
   async encode(longUrl: string): Promise<string> {
+    if (!longUrl || typeof longUrl !== "string" || longUrl.trim() === "") {
+      throw new Error("Invalid long URL");
+    }
+
     const existing = await pool.query(
       `SELECT short_key FROM urls WHERE long_url = $1`,
       [longUrl]
     );
-    if (existing.rowCount > 0) {
+    if ((existing.rowCount ?? 0) > 0) {
       return BASE_URL + existing.rows[0].short_key;
     }
 
@@ -49,7 +53,6 @@ export default class UrlShortener {
   async makeCustom(shortUrl: string, customAlias: string): Promise<string> {
     const shortKey = shortUrl.replace(BASE_URL, "");
 
-    // Check custom alias format
     if (!/^[a-zA-Z0-9_-]{1,64}$/.test(customAlias)) {
       throw new Error("Invalid alias");
     }
@@ -65,7 +68,7 @@ export default class UrlShortener {
       `SELECT 1 FROM urls WHERE short_key = $1`,
       [customAlias]
     );
-    if (conflict.rowCount > 0) throw new Error("Alias already taken");
+    if ((conflict.rowCount ?? 0) > 0) throw new Error("Alias already taken");
 
     const client = await pool.connect();
     try {
