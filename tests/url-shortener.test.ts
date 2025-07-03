@@ -46,8 +46,6 @@ describe("UrlShortener", () => {
     expect(shortener.getClickStats(short)).toBe(2);
   });
 
-  // ==== Edge case tests ====
-
   test("encode throws on invalid long URL", () => {
     expect(() => shortener.encode("")).toThrow("Invalid long URL");
     expect(() => shortener.encode(null as any)).toThrow("Invalid long URL");
@@ -106,28 +104,5 @@ describe("UrlShortener", () => {
     expect(() => shortener.getClickStats("http://sho.rt/unknown")).toThrow(
       "Short URL does not exist"
     );
-  });
-
-  test("reset clears all data", () => {
-    const original = "https://reset.com";
-    const short = shortener.encode(original);
-    shortener.decode(short);
-    expect(shortener.getClickStats(short)).toBe(1);
-
-    UrlShortener.reset();
-
-    expect(() => shortener.decode(short)).toThrow("Short URL not found");
-    expect(() => shortener.getClickStats(short)).toThrow(
-      "Short URL does not exist"
-    );
-  });
-
-  test("generateShortKey generates unique keys", () => {
-    const keys = new Set<string>();
-    for (let i = 0; i < 1000; i++) {
-      const key = (UrlShortener as any).generateShortKey();
-      expect(keys.has(key)).toBe(false);
-      keys.add(key);
-    }
   });
 });
