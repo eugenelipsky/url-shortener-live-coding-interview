@@ -5,7 +5,6 @@ describe("UrlShortener", () => {
 
   beforeEach(() => {
     shortener = new UrlShortener();
-    UrlShortener.reset();
   });
 
   test("should encode and decode correctly", () => {
