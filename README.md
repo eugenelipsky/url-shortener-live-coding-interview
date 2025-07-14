@@ -17,7 +17,7 @@ Complete the following methods in the `UrlShortener` class:
 
 1.  **`encode(longUrl: string): string`**
 
-    Converts a long URL into a unique shortened version. If the same URL is encoded multiple times, return the same short URL each time.
+    Converts a long URL into a unique shortened version(6-symbol alphanumeric slug). If the same URL is encoded multiple times, return the same short URL each time.
 
     ```ts
     shortener.encode("https://hello.com/something?is_new=true");
