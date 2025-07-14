@@ -29,6 +29,15 @@ describe("UrlShortener", () => {
     expect(short1).not.toBe(short2);
   });
 
+  test("should generate a 6-character alphanumeric slug", () => {
+    const original = "https://check-length.com";
+    const short = shortener.encode(original);
+    const slug = short.replace("http://sho.rt/", "");
+
+    expect(slug).toMatch(/^[a-z0-9]{6}$/);
+    expect(slug.length).toBe(6);
+  });
+
   test("creates custom alias and allows decoding", () => {
     const original = "https://test.com";
     const short = shortener.encode(original);
@@ -44,8 +53,6 @@ describe("UrlShortener", () => {
     shortener.decode(short);
     expect(shortener.getClickStats(short)).toBe(2);
   });
-
-  // ==== Edge case tests ====
 
   test("encode throws on invalid long URL", () => {
     expect(() => shortener.encode("")).toThrow("Invalid long URL");
