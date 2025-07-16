@@ -44,7 +44,7 @@ Complete the following methods in the `UrlShortener` class:
 
     - If the alias is already in use, throw an error.
 
-4.  **`getClickStats(shortUrl: string): number` (Optional)**
+4.  **`getClickStats(shortUrl: string): number`**
 
     ```ts
     shortener.decode("http://sho.rt/customAlias");
